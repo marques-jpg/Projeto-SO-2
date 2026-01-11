@@ -1,0 +1,171 @@
+#include "display.h"
+#include "board.h"
+#include "api.h"
+#include <stdlib.h>
+#include <ctype.h>
+
+int terminal_init() {
+    // Initialize ncurses mode
+    initscr();
+
+    // Disable line buffering - get characters immediately
+    cbreak();
+
+    // Don't echo typed characters to the screen
+    noecho();
+
+    // Enable special keys (arrow keys, function keys, etc.)
+    keypad(stdscr, TRUE);
+
+    // Timeout para o getch não bloquear (controlado pelo main)
+    timeout(100);
+
+    // Hide the cursor
+    curs_set(0);
+
+    // Enable color if terminal supports it
+    if (has_colors()) {
+        start_color();
+
+        // Define color pairs (foreground, background)
+        init_pair(1, COLOR_YELLOW, COLOR_BLACK);  // Pacman
+        init_pair(2, COLOR_RED, COLOR_BLACK);     // Ghosts
+        init_pair(3, COLOR_BLUE, COLOR_BLACK);    // Walls
+        init_pair(4, COLOR_WHITE, COLOR_BLACK);   // Points/dots
+        init_pair(5, COLOR_GREEN, COLOR_BLACK);   // UI elements
+        init_pair(6, COLOR_MAGENTA, COLOR_BLACK); // Portal
+        init_pair(7, COLOR_CYAN, COLOR_BLACK);    // Extra
+    }
+
+    // Clear the screen
+    clear();
+
+    return 0;
+}
+
+void draw_board_client(Board board) {
+    // Clear the screen before redrawing
+    clear();
+
+    // Draw the border/title
+    attron(COLOR_PAIR(5));
+    mvprintw(0, 0, "=== PACMAN GAME ===");
+    if (board.game_over) {
+        mvprintw(1, 0, " GAME OVER ");
+    } else if (board.victory) {
+        mvprintw(1, 0, " VICTORY ");
+    } else {
+        mvprintw(1, 0, " Use W/A/S/D to move | Q to quit");
+    }
+
+    // Starting row for the game board (leave space for UI)
+    int start_row = 3;
+
+    // Draw the board
+    for (int y = 0; y < board.height; y++) {
+        for (int x = 0; x < board.width; x++) {
+            char ch = board.data[y * board.width + x];
+
+            // Move cursor to position
+            move(start_row + y, x);
+
+            // Draw with appropriate color AND mapping
+            switch (ch) {
+                case 'W': // Wall (Recebido do Servidor) -> Desenha '#'
+                    attron(COLOR_PAIR(3));
+                    addch('#');
+                    attroff(COLOR_PAIR(3));
+                    break;
+
+                case 'P': // Pacman (Recebido do Servidor) -> Desenha 'C'
+                    attron(COLOR_PAIR(1) | A_BOLD);
+                    addch('C');
+                    attroff(COLOR_PAIR(1) | A_BOLD);
+                    break;
+
+                case 'M': // Monster/Ghost
+                    attron(COLOR_PAIR(2) | A_BOLD);
+                    addch('M');
+                    attroff(COLOR_PAIR(2) | A_BOLD);  
+                    break;
+
+                case 'G': // Charged Monster/Ghost (Se implementado)
+                    attron((COLOR_PAIR(2) | A_BOLD) | A_DIM);
+                    addch('M');
+                    attroff((COLOR_PAIR(2) | A_BOLD) | A_DIM);  
+                    break;
+
+                case '.': // Dot
+                    attron(COLOR_PAIR(4));
+                    addch('.');
+                    attroff(COLOR_PAIR(4));
+                    break;
+
+                case '@': // Portal
+                    attron(COLOR_PAIR(6));
+                    addch('@');
+                    attroff(COLOR_PAIR(6));
+                    break;
+
+                case ' ': // Empty space
+                    addch(' ');
+                    break;
+
+                default:
+                    // Fallback para debug (mostra o char original se desconhecido)
+                    addch(ch);
+                    break;
+            }
+        }
+    }
+
+    // Draw score/status at the bottom
+    attron(COLOR_PAIR(5));
+    mvprintw(start_row + board.height + 1, 0, "Points: %d",
+             board.accumulated_points);
+    attroff(COLOR_PAIR(5));
+}
+
+// Funções auxiliares mantidas para compatibilidade (não usadas no loop principal do cliente)
+char* get_board_displayed(board_t* board) {
+    (void)board; // Evitar unused warning
+    return NULL;
+}
+
+void draw_board(board_t* board, int mode) {
+    (void)board;
+    (void)mode;
+}
+
+void draw(char c, int colour_i, int pos_x, int pos_y) {
+    move(pos_y, pos_x);
+    attron(COLOR_PAIR(colour_i) | A_BOLD);
+    addch(c);
+    attroff(COLOR_PAIR(colour_i) | A_BOLD);
+}
+
+void refresh_screen() {
+    refresh();
+}
+
+char get_input() {
+    int ch = getch();
+    if (ch == ERR) return '\0';
+
+    ch = toupper((char)ch);
+    switch ((char)ch) {
+        case 'W': case 'S': case 'A': case 'D':
+        case 'Q': case 'G':
+            return (char)ch;
+        default:
+            return '\0';
+    }
+}
+
+void terminal_cleanup() {
+    endwin();
+}
+
+void set_timeout(int timeout_ms) {
+    timeout(timeout_ms);
+}
